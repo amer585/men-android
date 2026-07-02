@@ -1,0 +1,9 @@
+# Copy this file to local.properties and fill in your Turso credentials.
+# local.properties is gitignored — it never gets committed.
+#
+# Get these from your Turso dashboard:
+#   URL: the HTTPS endpoint of your database (NOT the libsql:// URL)
+#   TOKEN: a database-specific token (NOT the org API token)
+
+TURSO_URL=https://amer-amer321.aws-eu-west-1.turso.io
+TURSO_TOKEN=YOUR_DATABASE_TOKEN_HERE

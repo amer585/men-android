@@ -2,21 +2,32 @@ package com.madrastna.teacher.ui.login
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.madrastna.teacher.data.Teacher
+import com.madrastna.teacher.ui.components.BrandCrest
+import com.madrastna.teacher.ui.components.CinematicBackground
+import com.madrastna.teacher.ui.components.GlassCard
+import com.madrastna.teacher.ui.components.GoldGradientButton
+import com.madrastna.teacher.ui.theme.*
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
     onLoginSuccess: (Teacher) -> Unit,
@@ -27,118 +38,149 @@ fun LoginScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        // Logo / title
-        Text(
-            text = "إدارتنا الشاملة",
-            style = MaterialTheme.typography.headlineLarge,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Black,
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = "بوابة المعلمين",
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
-            fontSize = 14.sp,
-        )
+    Box(Modifier.fillMaxSize()) {
+        CinematicBackground()
 
-        Spacer(Modifier.height(40.dp))
-
-        // Username
-        OutlinedTextField(
-            value = username,
-            onValueChange = { username = it },
-            label = { Text("اسم المستخدم") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            colors = outlinedFieldColors(),
-            shape = RoundedCornerShape(12.dp),
-        )
-
-        Spacer(Modifier.height(16.dp))
-
-        // Password
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("كلمة المرور") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            colors = outlinedFieldColors(),
-            shape = RoundedCornerShape(12.dp),
-        )
-
-        // Error
-        if (error != null) {
-            Spacer(Modifier.height(12.dp))
-            Text(
-                text = error!!,
-                color = MaterialTheme.colorScheme.error,
-                fontSize = 14.sp,
-            )
-        }
-
-        Spacer(Modifier.height(24.dp))
-
-        // Login button
-        Button(
-            onClick = {
-                if (username.isBlank() || password.isBlank()) {
-                    error = "يرجى إدخال جميع البيانات"
-                    return@Button
-                }
-                loading = true
-                error = null
-                val result = onLogin(username.trim(), password)
-                loading = false
-                if (result != null) {
-                    onLoginSuccess(result)
-                } else {
-                    error = "اسم المستخدم أو كلمة المرور غير صحيحة"
-                }
-            },
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-            enabled = !loading,
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-            ),
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp)
+                .imePadding(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
-            if (loading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                )
-            } else {
-                Text("دخول", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            }
-        }
+            Spacer(Modifier.height(24.dp))
 
-        Spacer(Modifier.height(24.dp))
-        Text(
-            text = "تجريبي: ahmed / teacher123",
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
-            fontSize = 12.sp,
-        )
+            // ── Brand crest ──
+            BrandCrest(size = 96.dp)
+
+            Spacer(Modifier.height(18.dp))
+
+            // ── Title block ──
+            Text(
+                text = "إدارتنا الشاملة",
+                style = MaterialTheme.typography.headlineLarge,
+                color = Gold300,
+                fontWeight = FontWeight.Black,
+            )
+            Text(
+                text = "بوابة المعلمين",
+                color = TextSecondary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+            )
+
+            Spacer(Modifier.height(36.dp))
+
+            // ── Glass login card ──
+            GlassCard(
+                modifier = Modifier.fillMaxWidth(),
+                cornerRadius = 28.dp,
+            ) {
+                Column(Modifier.padding(26.dp)) {
+                    Text(
+                        text = "تسجيل الدخول",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = TextPrimary,
+                    )
+                    Text(
+                        text = "أدخل بياناتك للمتابعة",
+                        color = TextMuted,
+                        fontSize = 13.sp,
+                    )
+
+                    Spacer(Modifier.height(24.dp))
+
+                    // Username
+                    OutlinedTextField(
+                        value = username,
+                        onValueChange = { username = it },
+                        label = { Text("اسم المستخدم") },
+                        leadingIcon = {
+                            Icon(Icons.Default.Person, contentDescription = null, tint = Gold400)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        colors = fieldColors(),
+                        shape = RoundedCornerShape(16.dp),
+                    )
+
+                    Spacer(Modifier.height(16.dp))
+
+                    // Password
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text("كلمة المرور") },
+                        leadingIcon = {
+                            Icon(Icons.Default.Lock, contentDescription = null, tint = Gold400)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        colors = fieldColors(),
+                        shape = RoundedCornerShape(16.dp),
+                    )
+
+                    // Error
+                    if (error != null) {
+                        Spacer(Modifier.height(14.dp))
+                        Text(
+                            text = error!!,
+                            color = Rose400,
+                            fontSize = 13.sp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Rose400.copy(alpha = 0.10f))
+                                .padding(12.dp),
+                        )
+                    }
+
+                    Spacer(Modifier.height(26.dp))
+
+                    GoldGradientButton(
+                        text = if (loading) "جارٍ الدخول…" else "دخول",
+                        onClick = {
+                            if (username.isBlank() || password.isBlank()) {
+                                error = "يرجى إدخال جميع البيانات"
+                                return@GoldGradientButton
+                            }
+                            loading = true
+                            error = null
+                            val result = onLogin(username.trim(), password)
+                            loading = false
+                            if (result != null) onLoginSuccess(result)
+                            else error = "اسم المستخدم أو كلمة المرور غير صحيحة"
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !loading,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
+            Text(
+                text = "آمن · مشفّر · معتمد",
+                color = TextMuted,
+                fontSize = 12.sp,
+            )
+            Spacer(Modifier.height(28.dp))
+        }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-private fun outlinedFieldColors() = TextFieldDefaults.outlinedTextFieldColors(
-    focusedBorderColor = MaterialTheme.colorScheme.primary,
-    unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.15f),
-    focusedLabelColor = MaterialTheme.colorScheme.primary,
-    cursorColor = MaterialTheme.colorScheme.primary,
+private fun fieldColors() = TextFieldDefaults.outlinedTextFieldColors(
+    focusedBorderColor = Gold400,
+    unfocusedBorderColor = GlassBorder,
+    focusedLabelColor = Gold400,
+    unfocusedLabelColor = TextMuted,
+    cursorColor = Gold400,
+    focusedLeadingIconColor = Gold400,
+    unfocusedLeadingIconColor = Gold500,
+    focusedTextColor = TextPrimary,
+    unfocusedTextColor = TextSecondary,
 )

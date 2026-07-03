@@ -1,112 +1,137 @@
 package com.madrastna.teacher.ui.grades
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.madrastna.teacher.data.EGYPTIAN_SUBJECTS
 import com.madrastna.teacher.data.GRADE_LABELS
 import com.madrastna.teacher.data.StudentWithGrades
+import com.madrastna.teacher.ui.components.CinematicBackground
+import com.madrastna.teacher.ui.components.GlassCard
+import com.madrastna.teacher.ui.components.GoldGradientButton
+import com.madrastna.teacher.ui.components.StatusChip
+import com.madrastna.teacher.ui.theme.*
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GradesScreen(
     gradeLevel: Int,
     className: String,
     subjectName: String,
     students: List<StudentWithGrades>,
-    onSaveGrades: (Map<String, String>) -> Boolean, // ssn -> grade_value
+    onSaveGrades: (Map<String, String>) -> Boolean,
     onBack: () -> Unit,
 ) {
-    // Local draft state: ssn -> current text input
     val drafts = remember(students) {
         mutableStateMapOf<String, String>().apply {
-            students.forEach { s ->
-                put(s.ssn, s.grades[subjectName] ?: "")
-            }
+            students.forEach { s -> put(s.ssn, s.grades[subjectName] ?: "") }
         }
     }
     var saving by remember { mutableStateOf(false) }
-    var saveMsg by remember { mutableStateOf<String?>(null) }
-    val snackbarHost = remember { SnackbarHostState() }
+    val savedCount = students.count { drafts[it.ssn]?.isNotBlank() == true }
 
-    LaunchedEffect(saveMsg) {
-        if (saveMsg != null) {
-            snackbarHost.showSnackbar(saveMsg!!)
-            saveMsg = null
-        }
-    }
+    val filledDrafts = drafts.filter { it.value.isNotBlank() }.mapValues { it.value.trim() }
+    val hasChanges = filledDrafts.isNotEmpty()
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHost) },
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            "$subjectName — $className",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
-                        )
-                        Text(
-                            GRADE_LABELS[gradeLevel] ?: "الصف $gradeLevel",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                        )
-                    }
-                },
-                navigationIcon = {
+    Box(Modifier.fillMaxSize()) {
+        CinematicBackground()
+
+        Scaffold(
+            containerColor = Color.Transparent,
+            topBar = {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "رجوع")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع", tint = Gold400)
                     }
-                },
-                actions = {
-                    IconButton(onClick = {
-                        saving = true
-                        val toSave = drafts
-                            .filter { it.value.isNotBlank() }
-                            .mapValues { it.value.trim() }
-                        val ok = onSaveGrades(toSave)
-                        saving = false
-                        saveMsg = if (ok) "تم حفظ ${toSave.size} درجة بنجاح ✓" else "فشل الحفظ"
-                    }, enabled = !saving) {
-                        Icon(Icons.Default.Save, contentDescription = "حفظ")
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            subjectName,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            "${GRADE_LABELS[gradeLevel] ?: "الصف $gradeLevel"} · $className",
+                            color = Gold400,
+                            fontSize = 12.sp,
+                        )
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
-            )
-        },
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            items(students, key = { it.ssn }) { student ->
-                StudentGradeCard(
-                    student = student,
-                    subjectName = subjectName,
-                    currentValue = drafts[student.ssn] ?: "",
-                    onValueChange = { drafts[student.ssn] = it },
-                )
+                    StatusChip("$savedCount درجة", Gold300)
+                }
+            },
+        ) { padding ->
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item {
+                    Text(
+                        "إدخال درجات الطلاب",
+                        color = TextMuted,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                }
+                items(students, key = { it.ssn }) { student ->
+                    StudentGradeCard(
+                        student = student,
+                        subjectName = subjectName,
+                        currentValue = drafts[student.ssn] ?: "",
+                        onValueChange = { drafts[student.ssn] = it },
+                    )
+                }
+                item { Spacer(Modifier.height(96.dp)) }
             }
+        }
+
+        // ── Sticky save bar ──
+        Box(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+        ) {
+            GoldGradientButton(
+                text = if (saving) "جارٍ الحفظ…" else "حفظ الدرجات",
+                onClick = {
+                    if (!hasChanges || saving) return@GoldGradientButton
+                    saving = true
+                    val ok = onSaveGrades(filledDrafts)
+                    saving = false
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = hasChanges && !saving,
+                leadingIcon = {
+                    Icon(Icons.Default.Check, contentDescription = null, tint = Ink950, modifier = Modifier.size(18.dp))
+                },
+            )
         }
     }
 }
@@ -119,56 +144,65 @@ private fun StudentGradeCard(
     currentValue: String,
     onValueChange: (String) -> Unit,
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-        ),
-    ) {
+    val savedGrade = student.grades[subjectName]
+    val isEdited = currentValue.isNotBlank() && currentValue != savedGrade
+
+    GlassCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 18.dp) {
         Row(
-            modifier = Modifier
+            Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            // Student info
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = student.nameAr,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = if (student.gender == "F") "أنثى" else "ذكر",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                )
-                // Current saved grade
-                val savedGrade = student.grades[subjectName]
-                if (savedGrade != null && savedGrade.isNotBlank()) {
-                    Text(
-                        text = "الدرجة الحالية: $savedGrade",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+            // Avatar circle
+            Box(
+                Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.linearGradient(listOf(Gold500.copy(alpha = 0.22f), Gold700.copy(alpha = 0.08f)))
                     )
-                }
+                    .border(1.dp, GlassBorder, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    student.nameAr.take(1),
+                    color = Gold300,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp,
+                )
+            }
+
+            Spacer(Modifier.width(14.dp))
+
+            Column(Modifier.weight(1f)) {
+                Text(
+                    student.nameAr,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                )
+                val sub = StringBuilder()
+                if (student.gender == "F") sub.append("أنثى") else sub.append("ذكر")
+                if (savedGrade != null && savedGrade.isNotBlank()) sub.append(" · الحالية: $savedGrade")
+                Text(sub.toString(), color = if (isEdited) Amber400 else TextMuted, fontSize = 12.sp)
             }
 
             // Grade input
             OutlinedTextField(
                 value = currentValue,
                 onValueChange = { onValueChange(it.filter { c -> c.isDigit() || c == '.' }.take(5)) },
-                modifier = Modifier.width(90.dp),
+                modifier = Modifier.width(88.dp),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(14.dp),
+                placeholder = { Text("—", color = TextMuted) },
                 colors = TextFieldDefaults.outlinedTextFieldColors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
-                    cursorColor = MaterialTheme.colorScheme.primary,
+                    focusedBorderColor = Gold400,
+                    unfocusedBorderColor = GlassBorder,
+                    cursorColor = Gold400,
+                    focusedTextColor = TextPrimary,
+                    unfocusedTextColor = TextSecondary,
                 ),
             )
         }

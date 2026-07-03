@@ -3,11 +3,20 @@ package com.madrastna.teacher
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.runtime.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.madrastna.teacher.data.*
+import com.madrastna.teacher.ui.theme.Gold400
 import com.madrastna.teacher.ui.theme.MadrastnaTheme
+import com.madrastna.teacher.ui.theme.TextSecondary
 import com.madrastna.teacher.ui.login.LoginScreen
 import com.madrastna.teacher.ui.grades.ClassSelectScreen
 import com.madrastna.teacher.ui.grades.GradesScreen
@@ -21,9 +30,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             MadrastnaTheme {
-                AppNavigation(
-                    repository = repository,
-                )
+                AppNavigation(repository = repository)
             }
         }
     }
@@ -43,12 +50,9 @@ private fun AppNavigation(repository: TeacherRepository) {
     if (currentTeacher == null) {
         // ── LOGIN SCREEN ──
         LoginScreen(
-            onLogin = { user, pass ->
-                repository.login(user, pass)
-            },
+            onLogin = { user, pass -> repository.login(user, pass) },
             onLoginSuccess = { t ->
                 teacher = t
-                // Load classes in background
                 loading = true
                 Thread {
                     val cls = repository.getTeacherClasses(t.teacherId)
@@ -59,55 +63,74 @@ private fun AppNavigation(repository: TeacherRepository) {
         )
     } else if (currentClass == null) {
         // ── CLASS SELECT SCREEN ──
-        ClassSelectScreen(
-            teacher = currentTeacher,
-            classes = classes,
-            onClassClick = { cls ->
-                selectedClass = cls
-                loading = true
-                Thread {
-                    val roster = repository.getStudentsInClass(
-                        cls.gradeLevel, cls.className, currentTeacher.schoolName
-                    )
-                    students = roster
-                    loading = false
-                }.start()
-            },
-            onLogout = {
-                teacher = null
-                classes = emptyList()
-                selectedClass = null
-                students = emptyList()
-            },
-        )
+        Box(Modifier.fillMaxSize()) {
+            ClassSelectScreen(
+                teacher = currentTeacher,
+                classes = classes,
+                onClassClick = { cls ->
+                    selectedClass = cls
+                    loading = true
+                    Thread {
+                        val roster = repository.getStudentsInClass(
+                            cls.gradeLevel, cls.className, currentTeacher.schoolName
+                        )
+                        students = roster
+                        loading = false
+                    }.start()
+                },
+                onLogout = {
+                    teacher = null
+                    classes = emptyList()
+                    selectedClass = null
+                    students = emptyList()
+                },
+            )
+            if (loading) LoadingOverlay("جارٍ تحميل الفصول…")
+        }
     } else {
         // ── GRADES EDIT SCREEN ──
-        GradesScreen(
-            gradeLevel = currentClass.gradeLevel,
-            className = currentClass.className,
-            subjectName = currentClass.subjectName,
-            students = students,
-            onSaveGrades = { ssnToGrade ->
-                // Save each student's updated grade
-                var allOk = true
-                for ((ssn, grade) in ssnToGrade) {
-                    // Find the student, merge the new grade, save
-                    val student = students.find { it.ssn == ssn }
-                    if (student != null) {
-                        val updatedGrades = student.grades.toMutableMap()
-                        updatedGrades[currentClass.subjectName] = grade
-                        val ok = repository.updateStudentGrades(ssn, updatedGrades)
-                        if (!ok) allOk = false
-                        // Update local state
-                        student.grades[currentClass.subjectName] = grade
+        Box(Modifier.fillMaxSize()) {
+            GradesScreen(
+                gradeLevel = currentClass.gradeLevel,
+                className = currentClass.className,
+                subjectName = currentClass.subjectName,
+                students = students,
+                onSaveGrades = { ssnToGrade ->
+                    var allOk = true
+                    for ((ssn, grade) in ssnToGrade) {
+                        val student = students.find { it.ssn == ssn }
+                        if (student != null) {
+                            val updatedGrades = student.grades.toMutableMap()
+                            updatedGrades[currentClass.subjectName] = grade
+                            if (!repository.updateStudentGrades(ssn, updatedGrades)) allOk = false
+                            student.grades[currentClass.subjectName] = grade
+                        }
                     }
-                }
-                allOk
-            },
-            onBack = {
-                selectedClass = null
-                students = emptyList()
-            },
-        )
+                    allOk
+                },
+                onBack = {
+                    selectedClass = null
+                    students = emptyList()
+                },
+            )
+            if (loading) LoadingOverlay("جارٍ تحميل الطلاب…")
+        }
+    }
+}
+
+/** Full-screen translucent loading overlay with a gold spinner + caption. */
+@Composable
+private fun LoadingOverlay(text: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xCC060A13)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator(color = Gold400, strokeWidth = 3.dp, modifier = Modifier.size(44.dp))
+            Spacer(Modifier.height(14.dp))
+            Text(text, color = TextSecondary, fontSize = 14.sp)
+        }
     }
 }

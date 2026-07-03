@@ -1,34 +1,51 @@
 package com.madrastna.teacher.ui.theme
 
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
-import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 private val DarkColorScheme = darkColorScheme(
     primary = Gold500,
-    secondary = Gold400,
-    tertiary = Gold300,
-    background = Ink950,
-    surface = Ink850,
     onPrimary = Ink950,
+    primaryContainer = Gold700,
+    secondary = Gold400,
     onSecondary = Ink950,
-    onBackground = Color0FInk,
-    onSurface = Color0FInk,
+    tertiary = Gold300,
+    background = Ink925,
+    onBackground = TextPrimary,
+    surface = Ink850,
+    onSurface = TextPrimary,
+    surfaceVariant = Ink800,
+    onSurfaceVariant = TextSecondary,
+    outline = GlassBorder,
     error = Rose400,
+    onError = Ink950,
 )
 
-// Workaround: Compose doesn't let us reference a val before it's defined in this file
-private val Color0FInk = androidx.compose.ui.graphics.Color(0xFFDFE4EE)
+private val AppShapes = Shapes(
+    extraSmall = RoundedCornerShape(10.dp),
+    small = RoundedCornerShape(14.dp),
+    medium = RoundedCornerShape(20.dp),
+    large = RoundedCornerShape(26.dp),
+    extraLarge = RoundedCornerShape(32.dp),
+)
 
-private val AppTypography = Typography(
-    bodyLarge = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Normal),
-    headlineLarge = TextStyle(fontSize = 28.sp, fontWeight = FontWeight.Black),
-    titleLarge = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Bold),
-    labelLarge = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
+private val AppTypography = androidx.compose.material3.Typography(
+    displaySmall = TextStyle(fontSize = 30.sp, fontWeight = FontWeight.Black, lineHeight = 36.sp),
+    headlineLarge = TextStyle(fontSize = 28.sp, fontWeight = FontWeight.Black, lineHeight = 34.sp),
+    headlineMedium = TextStyle(fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 30.sp),
+    titleLarge = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Bold, lineHeight = 26.sp),
+    titleMedium = TextStyle(fontSize = 17.sp, fontWeight = FontWeight.Bold, lineHeight = 22.sp),
+    bodyLarge = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Normal, lineHeight = 24.sp),
+    bodyMedium = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Normal, lineHeight = 20.sp),
+    labelLarge = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.SemiBold, lineHeight = 18.sp),
+    labelMedium = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium, lineHeight = 16.sp),
 )
 
 @Composable
@@ -36,6 +53,7 @@ fun MadrastnaTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = DarkColorScheme,
         typography = AppTypography,
+        shapes = AppShapes,
         content = content,
     )
 }

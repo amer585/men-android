@@ -45,3 +45,48 @@ val GRADE_LABELS = mapOf(
     11 to "الثانية الثانوية",
     12 to "الثالثة الثانوية",
 )
+
+/**
+ * Egyptian Ministry of Education administrative hierarchy — who is above whom,
+ * from the national Ministry down to the student. Each level defines its scope
+ * and whether it may add/manage students.
+ *
+ *   🏛️ Ministry (وزارة التربية والتعليم) — national, can manage ANY school
+ *      ↓
+ *   🏷️ Directorate (المديرية التعليمية) — governorate-wide
+ *      ↓
+ *   🗺️ Administration (الإدارة التعليمية) — district / markaz
+ *      ↓
+ *   🏫 Principal (ناظر المدرسة) — their OWN school only
+ *      ↓
+ *   👨‍🏫 Teacher (المعلم) — edits grades for assigned classes
+ *      ↓
+ *   🎒 Student (الطالب)
+ */
+data class HierarchyLevel(
+    val order: Int,
+    val titleAr: String,
+    val scopeAr: String,
+    val canAddStudents: Boolean,
+    val icon: String,
+)
+
+val EGYPTIAN_HIERARCHY = listOf(
+    HierarchyLevel(1, "وزارة التربية والتعليم", "مستوى وطني · كل المدارس", true, "🏛️"),
+    HierarchyLevel(2, "المديرية التعليمية", "مستوى المحافظة", true, "🏷️"),
+    HierarchyLevel(3, "الإدارة التعليمية", "مستوى المركز / الحي", true, "🗺️"),
+    HierarchyLevel(4, "مدير المدرسة", "مدرسته فقط", true, "🏫"),
+    HierarchyLevel(5, "المعلم", "يُدخِل الدرجات فقط", false, "👨‍🏫"),
+    HierarchyLevel(6, "الطالب", "—", false, "🎒"),
+)
+
+/** Map backend role strings → human Arabic role names. */
+val ROLE_LABELS_AR = mapOf(
+    "admin" to "مدير النظام",
+    "principal" to "مدير المدرسة",
+    "teacher" to "معلم",
+    "directorate" to "المديرية التعليمية",
+    "directorate_manager" to "مدير المديرية",
+    "district" to "الإدارة التعليمية",
+    "district_manager" to "مدير الإدارة",
+)

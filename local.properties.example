@@ -1,9 +1,10 @@
-# Copy this file to local.properties and fill in your Turso credentials.
+# Copy this file to local.properties and (optionally) override the backend URL.
 # local.properties is gitignored — it never gets committed.
 #
-# Get these from your Turso dashboard:
-#   URL: the HTTPS endpoint of your database (NOT the libsql:// URL)
-#   TOKEN: a database-specific token (NOT the org API token)
+# The Android app talks ONLY to the backend over HTTPS. No Turso/libSQL
+# database token is embedded in the APK — the backend owns the database,
+# caching and security, and authenticates every request with a short-lived JWT.
+#
+# BACKEND_URL is the absolute API root (the deployed Hugging Face Space).
 
-TURSO_URL=https://amer-amer321.aws-eu-west-1.turso.io
-TURSO_TOKEN=YOUR_DATABASE_TOKEN_HERE
+BACKEND_URL=https://amer21-mcp.hf.space/api

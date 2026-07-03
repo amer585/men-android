@@ -1,5 +1,7 @@
 package com.madrastna.teacher.ui.login
 
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -14,7 +16,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -32,7 +33,9 @@ import com.madrastna.teacher.ui.theme.*
 fun LoginScreen(
     onLoginSuccess: (Teacher) -> Unit,
     onLogin: (String, String) -> Teacher?,
+    onSwitchToTeacher: () -> Unit = {},
 ) {
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -150,10 +153,18 @@ fun LoginScreen(
                             }
                             loading = true
                             error = null
-                            val result = onLogin(username.trim(), password)
-                            loading = false
-                            if (result != null) onLoginSuccess(result)
-                            else error = "اسم المستخدم أو كلمة المرور غير صحيحة"
+                            // Network MUST happen off the main thread.
+                            Thread {
+                                val result = onLogin(username.trim(), password)
+                                mainHandler.post {
+                                    loading = false
+                                    if (result != null) {
+                                        onLoginSuccess(result)
+                                    } else {
+                                        error = "اسم المستخدم أو كلمة المرور غير صحيحة"
+                                    }
+                                }
+                            }.start()
                         },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !loading,
@@ -161,7 +172,11 @@ fun LoginScreen(
                 }
             }
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(16.dp))
+            TextButton(onClick = onSwitchToTeacher) {
+                Text("دخول بحساب معلم (بريد إلكتروني)", color = Gold300, fontSize = 13.sp)
+            }
+            Spacer(Modifier.height(4.dp))
             Text(
                 text = "آمن · مشفّر · معتمد",
                 color = TextMuted,

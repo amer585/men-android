@@ -90,3 +90,32 @@ val ROLE_LABELS_AR = mapOf(
     "district" to "الإدارة التعليمية",
     "district_manager" to "مدير الإدارة",
 )
+
+// ── Teacher-account workflow (email self-registration → admin approval → JWT) ─
+
+/** A registered teacher account (mirrors backend teacher_accounts row). */
+data class TeacherAccount(
+    val id: String,
+    val name: String,
+    val email: String,
+    val phone: String?,
+    val subject: String?,
+    val isVerified: Boolean,
+)
+
+/** A student linked to a teacher (teacher-DB relation + student-DB enrichment). */
+data class LinkedStudent(
+    val studentId: String,
+    val nameAr: String?,
+    val schoolName: String?,
+    val gradeLevel: Int,
+    val className: String?,
+    val linkedAt: String?,
+)
+
+/** Generic call outcome used by login / register / link flows. */
+data class CallResult(
+    val ok: Boolean,
+    val message: String,
+    val account: TeacherAccount? = null,
+)

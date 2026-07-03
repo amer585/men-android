@@ -13,21 +13,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.madrastna.teacher.data.*
+import com.madrastna.teacher.data.ApiClient
+import com.madrastna.teacher.data.ClassAssignment
+import com.madrastna.teacher.data.StudentWithGrades
+import com.madrastna.teacher.data.Teacher
+import com.madrastna.teacher.data.TeacherRepository
+import com.madrastna.teacher.ui.account.TeacherAccountScreen
+import com.madrastna.teacher.ui.grades.ClassSelectScreen
+import com.madrastna.teacher.ui.grades.GradesScreen
+import com.madrastna.teacher.ui.login.LoginScreen
 import com.madrastna.teacher.ui.theme.Gold400
 import com.madrastna.teacher.ui.theme.MadrastnaTheme
 import com.madrastna.teacher.ui.theme.TextSecondary
-import com.madrastna.teacher.ui.login.LoginScreen
-import com.madrastna.teacher.ui.grades.ClassSelectScreen
-import com.madrastna.teacher.ui.grades.GradesScreen
 
 class MainActivity : ComponentActivity() {
 
-    private val tursoClient by lazy { TursoClient() }
-    private val repository by lazy { TeacherRepository(tursoClient) }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // One backend client + repository. No database token lives in the APK.
+        val apiClient = ApiClient(applicationContext)
+        val repository = TeacherRepository(apiClient)
         setContent {
             MadrastnaTheme {
                 AppNavigation(repository = repository)
@@ -38,6 +43,10 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun AppNavigation(repository: TeacherRepository) {
+    // "staff" = legacy username grade-entry · "teacher" = teacher-account workflow.
+    var mode by remember { mutableStateOf("staff") }
+
+    // Staff / grade-entry session state.
     var teacher by remember { mutableStateOf<Teacher?>(null) }
     var classes by remember { mutableStateOf<List<ClassAssignment>>(emptyList()) }
     var selectedClass by remember { mutableStateOf<ClassAssignment?>(null) }
@@ -47,9 +56,15 @@ private fun AppNavigation(repository: TeacherRepository) {
     val currentTeacher = teacher
     val currentClass = selectedClass
 
-    if (currentTeacher == null) {
-        // ── LOGIN SCREEN ──
-        LoginScreen(
+    when {
+        // ── Teacher-account workflow (email login / register / dashboard) ──
+        mode == "teacher" -> TeacherAccountScreen(
+            repository = repository,
+            onBack = { mode = "staff" },
+        )
+
+        // ── Staff login ──
+        currentTeacher == null -> LoginScreen(
             onLogin = { user, pass -> repository.login(user, pass) },
             onLoginSuccess = { t ->
                 teacher = t
@@ -60,10 +75,11 @@ private fun AppNavigation(repository: TeacherRepository) {
                     loading = false
                 }.start()
             },
+            onSwitchToTeacher = { mode = "teacher" },
         )
-    } else if (currentClass == null) {
-        // ── CLASS SELECT SCREEN ──
-        Box(Modifier.fillMaxSize()) {
+
+        // ── Class select ──
+        currentClass == null -> Box(Modifier.fillMaxSize()) {
             ClassSelectScreen(
                 teacher = currentTeacher,
                 classes = classes,
@@ -72,13 +88,17 @@ private fun AppNavigation(repository: TeacherRepository) {
                     loading = true
                     Thread {
                         val roster = repository.getStudentsInClass(
-                            cls.gradeLevel, cls.className, currentTeacher.schoolName
+                            cls.gradeLevel,
+                            cls.className,
+                            currentTeacher.schoolName,
+                            cls.subjectName,
                         )
                         students = roster
                         loading = false
                     }.start()
                 },
                 onLogout = {
+                    repository.clearSession()
                     teacher = null
                     classes = emptyList()
                     selectedClass = null
@@ -87,9 +107,9 @@ private fun AppNavigation(repository: TeacherRepository) {
             )
             if (loading) LoadingOverlay("جارٍ تحميل الفصول…")
         }
-    } else {
-        // ── GRADES EDIT SCREEN ──
-        Box(Modifier.fillMaxSize()) {
+
+        // ── Grade editing ──
+        else -> Box(Modifier.fillMaxSize()) {
             GradesScreen(
                 gradeLevel = currentClass.gradeLevel,
                 className = currentClass.className,

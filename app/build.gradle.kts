@@ -19,10 +19,11 @@ android {
         val props = java.util.Properties()
         if (localProps.exists()) props.load(localProps.inputStream())
 
-        buildConfigField("String", "TURSO_URL",
-            "\"${props.getProperty("TURSO_URL", "https://amer-amer321.aws-eu-west-1.turso.io")}\"")
-        buildConfigField("String", "TURSO_TOKEN",
-            "\"${props.getProperty("TURSO_TOKEN", "")}\"")
+        // Backend API base URL — public, safe to ship in the APK.
+        // The app never embeds a database token; the backend owns DB + security.
+        // Optional override via local.properties BACKEND_URL.
+        buildConfigField("String", "BACKEND_URL",
+            "\"${props.getProperty("BACKEND_URL", "https://amer21-mcp.hf.space/api")}\"")
     }
 
     buildFeatures {

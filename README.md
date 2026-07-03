@@ -1,64 +1,45 @@
 # مدرستنا - المعلم (Teacher App)
 
-Android app for teachers to view and edit student grades. Connects directly to
-a Turso (libSQL) database via the HTTP API — no backend server needed.
+Android app for teachers. Talks **only** to the deployed backend
+(`https://amer21-mcp.hf.space/api`) over HTTPS — **no Turso/libSQL database
+token is embedded in the APK**. The backend owns the databases, caching and
+security and authenticates every request with a short-lived JWT.
+
+Two entry points:
+
+1. **Staff / grade entry** — username login → pick a class/subject → edit grades
+   (routed through `/login`, `/hierarchy/*`, `/grades/update`).
+2. **Teacher account** — email self-registration → admin approval → JWT login →
+   a dashboard of linked students with read-only portal access
+   (`/teacher/register|login|profile|students`, `/student/portal`).
 
 ## Setup
 
-### 1. Get your Turso database token
-
-The org-level API token you were given **does not work directly** for database
-access. You need a **database-specific token**. Create one via the Turso API:
-
-```bash
-curl -X POST "https://api.turso.tech/v1/organizations/amer321/databases/amer/auth/tokens" \
-  -H "Authorization: Bearer YOUR_ORG_TOKEN"
-```
-
-This returns a `jwt` — that's your database token.
-
-### 2. Configure secrets
-
-Create `local.properties` in the project root (gitignored):
+The backend URL is a **public** value and is shipped in `BuildConfig`. To
+override it locally, create `local.properties` in the project root (gitignored):
 
 ```properties
-TURSO_URL=https://amer-amer321.aws-eu-west-1.turso.io
-TURSO_TOKEN=eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9...(full database token)
+BACKEND_URL=https://amer21-mcp.hf.space/api
 ```
 
-⚠️ **Important**: The token must be the **full** database JWT (336 chars). If
-truncated, you'll get HTTP 401 errors.
+## Build & Run
 
-### 3. Build & Run
-
-Open the project in Android Studio and press Run. Or:
+Open in Android Studio and press Run, or:
 
 ```bash
 ./gradlew assembleDebug
 ```
 
-## Demo Login
-
-- **Username:** `ahmed`
-- **Password:** `teacher123`
-
-## Features
-
-- Teacher login (SHA-256 password verification)
-- View assigned classes
-- Edit student grades per subject (grades_json single-column model)
-- Save grades with instant feedback (Snackbar)
-
 ## Architecture
 
-- **Kotlin + Jetpack Compose** (Material 3)
-- **OkHttp** for Turso HTTP API calls
-- **Single-activity** architecture with state-based navigation
-- Direct database access via Turso v2/pipeline endpoint
+- **Kotlin + Jetpack Compose** (Material 3), single-activity state navigation.
+- **`ApiClient`** — OkHttp + JSON client; one JWT session in SharedPreferences.
+- **`TeacherRepository`** — the single data layer; staff + teacher-account flows.
+- **`TeacherAccountScreen`** — teacher login / register / dashboard.
+- All network calls run on background threads and post results back to the UI.
 
-## Security Note
+## Security
 
-The Turso token is embedded in the APK via `BuildConfig`. Anyone who decompiles
-the APK could extract it. For production use, consider:
-- Using a backend proxy (like the HF Space backend) instead of direct DB access
-- Or using Turso's per-database auth with limited scope
+There is **no** database credential in the APK. The app holds only a JWT issued
+by the backend. Direct Turso access was removed so a decompiled APK leaks no
+secrets — the backend is the only component that ever touches the databases.

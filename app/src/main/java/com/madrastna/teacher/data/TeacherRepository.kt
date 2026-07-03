@@ -3,100 +3,217 @@ package com.madrastna.teacher.data
 import org.json.JSONObject
 
 /**
- * Data repository — handles all database operations via TursoClient.
- * Each function escapes values inline (single quotes doubled) to prevent
- * SQL injection on the simple HTTP API.
+ * Single source of truth for app data. Every call is routed through the
+ * backend [ApiClient] (HTTPS + JWT) — there is NO direct database access and
+ * NO embedded database token. The backend owns the databases, caching and
+ * security; the app only ever holds a short-lived JWT.
+ *
+ * All methods are BLOCKING and must be called from a background thread.
+ *
+ * Two surfaces are exposed:
+ *  • Staff / grade-entry (legacy)  — POST /login, hierarchy, /grades/update.
+ *  • Teacher-account workflow      — /teacher/register|login|profile|students.
  */
-class TeacherRepository(private val db: TursoClient) {
+class TeacherRepository(private val api: ApiClient) {
 
-    private fun esc(s: String): String = s.replace("'", "''")
+    // ── Staff / grade-entry session ───────────────────────────
+    private var staffSchoolName: String? = null
 
-    /**
-     * Authenticate a teacher by username + password.
-     * Password is SHA-256 hashed and compared to the stored hash.
-     * @return Teacher object on success, null on failure.
-     */
-    fun login(username: String, password: String): Teacher? {
-        val hash = db.hashPassword(password)
-        val rows = db.query(
-            "SELECT teacher_id, username, teacher_name_ar, role, school_name, password_hash " +
-            "FROM teachers WHERE username = '${esc(username)}' AND is_active = 1 LIMIT 1"
+    // Editing context captured when a roster is loaded; reused by grade writes.
+    private var ctxGrade: Int = 0
+    private var ctxClass: String = ""
+    private var ctxSubject: String = ""
+
+    fun clearSession() = api.clearToken()
+
+    /** Authenticate staff (teacher/principal/admin) and remember the JWT. */
+    fun login(username: String, password: String): Teacher? = try {
+        val res = api.staffLogin(username, password)
+        val user = res.optJSONObject("user") ?: JSONObject()
+        staffSchoolName = user.optString("school_name").takeIf { it.isNotEmpty() } ?: "ALL"
+        Teacher(
+            teacherId = 0,
+            username = user.optString("name").takeIf { it.isNotEmpty() } ?: username,
+            nameAr = user.optString("teacher_name_ar").takeIf { it.isNotEmpty() }
+                ?: user.optString("name").takeIf { it.isNotEmpty() } ?: username,
+            role = user.optString("role").takeIf { it.isNotEmpty() } ?: "teacher",
+            schoolName = staffSchoolName ?: "ALL",
         )
-        if (rows.isEmpty()) return null
-
-        val row = rows[0]
-        val storedHash = row["password_hash"] ?: return null
-
-        // Check if password matches (supports both SHA-256 and plaintext)
-        val inputHash = hash.lowercase()
-        val stored = storedHash.lowercase().trim()
-        if (inputHash != stored && password != storedHash) return null
-
-        return Teacher(
-            teacherId = row["teacher_id"]?.toIntOrNull() ?: 0,
-            username = row["username"] ?: username,
-            nameAr = row["teacher_name_ar"] ?: username,
-            role = row["role"] ?: "teacher",
-            schoolName = row["school_name"] ?: "ALL",
-        )
+    } catch (e: Exception) {
+        null
     }
 
     /**
-     * Get all classes assigned to a teacher.
+     * Classes the logged-in staff member may edit. The backend exposes
+     * school-level classes; we expand each into one entry per subject so the
+     * grade editor always has a subject context for writes.
      */
-    fun getTeacherClasses(teacherId: Int): List<ClassAssignment> {
-        val rows = db.query(
-            "SELECT grade_level, class_name, subject_name FROM teacher_classes " +
-            "WHERE teacher_id = $teacherId ORDER BY grade_level, class_name"
-        )
-        return rows.map { r ->
-            ClassAssignment(
-                gradeLevel = r["grade_level"]?.toIntOrNull() ?: 0,
-                className = r["class_name"] ?: "",
-                subjectName = r["subject_name"] ?: "",
-            )
+    fun getTeacherClasses(teacherId: Int): List<ClassAssignment> = try {
+        val school = staffSchoolName ?: "ALL"
+        val res = api.classes(school)
+        val arr = res.optJSONArray("classes") ?: return emptyList()
+        val out = mutableListOf<ClassAssignment>()
+        for (i in 0 until arr.length()) {
+            val c = arr.optJSONObject(i) ?: continue
+            val grade = c.optInt("grade_level", 0)
+            if (grade == 0) continue
+            val className = c.optString("class_name")
+            if (className.isEmpty()) continue
+            for (subject in EGYPTIAN_SUBJECTS) {
+                out.add(ClassAssignment(grade, className, subject))
+            }
         }
+        out.sortedWith(compareBy({ it.gradeLevel }, { it.className }, { it.subjectName }))
+    } catch (e: Exception) {
+        emptyList()
     }
 
-    /**
-     * Get all students in a class with their grades (from grades_json column).
-     */
-    fun getStudentsInClass(gradeLevel: Int, className: String, schoolName: String): List<StudentWithGrades> {
-        val rows = db.query(
-            "SELECT ssn_encrypted, student_name_ar, gender, class_name, grades_json " +
-            "FROM students WHERE grade_level = $gradeLevel AND class_name = '${esc(className)}' " +
-            "AND school_name = '${esc(schoolName)}' ORDER BY student_name_ar"
-        )
-        return rows.map { r ->
-            val gradesJson = r["grades_json"] ?: "{}"
-            val grades = mutableMapOf<String, String>()
-            try {
-                val obj = JSONObject(gradesJson)
-                obj.keys().forEach { key ->
-                    grades[key] = obj.getString(key)
+    /** Load a class roster; captures the editing context for grade writes. */
+    fun getStudentsInClass(
+        gradeLevel: Int,
+        className: String,
+        schoolName: String,
+        subjectName: String,
+    ): List<StudentWithGrades> {
+        ctxGrade = gradeLevel
+        ctxClass = className
+        ctxSubject = subjectName
+        return try {
+            val res = api.roster(schoolName, gradeLevel, className)
+            val arr = res.optJSONArray("students") ?: return emptyList()
+            val out = mutableListOf<StudentWithGrades>()
+            for (i in 0 until arr.length()) {
+                val s = arr.optJSONObject(i) ?: continue
+                val ssn = s.optString("ssn_encrypted")
+                if (ssn.isEmpty()) continue
+                val grades = mutableMapOf<String, String>()
+                val gArr = s.optJSONArray("grades")
+                if (gArr != null) {
+                    for (j in 0 until gArr.length()) {
+                        val g = gArr.optJSONObject(j) ?: continue
+                        val subj = g.optString("subject_name")
+                        if (subj.isEmpty()) continue
+                        grades[subj] = g.optString("grade_value")
+                    }
                 }
-            } catch (_: Exception) { }
-
-            StudentWithGrades(
-                ssn = r["ssn_encrypted"] ?: "",
-                nameAr = r["student_name_ar"] ?: "—",
-                gender = r["gender"] ?: "M",
-                className = r["class_name"] ?: className,
-                grades = grades,
-            )
+                out.add(
+                    StudentWithGrades(
+                        ssn = ssn,
+                        nameAr = s.optString("student_name_ar").ifEmpty { "—" },
+                        gender = s.optString("gender").ifEmpty { "M" },
+                        className = s.optString("class_name").ifEmpty { className },
+                        grades = grades,
+                    ),
+                )
+            }
+            out
+        } catch (e: Exception) {
+            emptyList()
         }
     }
 
-    /**
-     * Update a single student's grades_json (all subjects in one column).
-     * Does a read-modify-write: reads current grades, merges, writes back.
-     */
-    fun updateStudentGrades(ssn: String, grades: Map<String, String>): Boolean {
-        val jsonStr = esc(JSONObject(grades).toString())
-        val affected = db.execute(
-            "UPDATE students SET grades_json = '$jsonStr', updated_at = datetime('now') " +
-            "WHERE ssn_encrypted = '${esc(ssn)}'"
-        )
-        return affected > 0
+    /** Update the current subject's grade for one student. */
+    fun updateStudentGrades(ssn: String, grades: Map<String, String>): Boolean = try {
+        val gradeValue = grades[ctxSubject] ?: return false
+        val entry = JSONObject()
+            .put("ssn_encrypted", ssn)
+            .put("grade_value", gradeValue)
+            .put("grade_level", ctxGrade)
+            .put("class_name", ctxClass)
+            .put("subject_name", ctxSubject)
+        api.updateGrades(listOf(entry))
+        true
+    } catch (e: Exception) {
+        false
     }
+
+    // ── Teacher-account workflow ──────────────────────────────
+
+    /** Email login for a verified teacher account. */
+    fun teacherLogin(email: String, password: String): CallResult = try {
+        val res = api.teacherLogin(email, password)
+        CallResult(
+            ok = true,
+            message = "",
+            account = parseAccount(res.optJSONObject("account") ?: JSONObject()),
+        )
+    } catch (e: ApiClient.ApiException) {
+        CallResult(ok = false, message = e.message ?: "بيانات الدخول غير صحيحة")
+    } catch (e: Exception) {
+        CallResult(ok = false, message = "تعذّر الوصول إلى الخادم")
+    }
+
+    /** Public self-registration (account is created pending admin approval). */
+    fun teacherRegister(
+        name: String,
+        email: String,
+        password: String,
+        phone: String?,
+        subject: String?,
+    ): CallResult = try {
+        val res = api.teacherRegister(name, email, password, phone, subject)
+        val account = res.optJSONObject("account")?.let { parseAccount(it) }
+        val msg = res.optString("message").ifEmpty { "تم استلام طلبك — بانتظار موافقة الإدارة." }
+        CallResult(ok = true, message = msg, account = account)
+    } catch (e: ApiClient.ApiException) {
+        CallResult(ok = false, message = e.message ?: "تعذّر التسجيل")
+    } catch (e: Exception) {
+        CallResult(ok = false, message = "تعذّر الوصول إلى الخادم")
+    }
+
+    /** Currently authenticated teacher profile (refreshes verification state). */
+    fun teacherProfile(): TeacherAccount? = try {
+        parseAccount(api.teacherProfile())
+    } catch (e: Exception) {
+        null
+    }
+
+    /** Students linked to the authenticated teacher. */
+    fun getTeacherStudents(): List<LinkedStudent> = try {
+        val res = api.teacherStudents()
+        val arr = res.optJSONArray("students") ?: return emptyList()
+        val out = mutableListOf<LinkedStudent>()
+        for (i in 0 until arr.length()) {
+            val s = arr.optJSONObject(i) ?: continue
+            out.add(
+                LinkedStudent(
+                    studentId = s.optString("student_id"),
+                    nameAr = s.optString("student_name_ar").takeIf { it.isNotEmpty() },
+                    schoolName = s.optString("school_name").takeIf { it.isNotEmpty() },
+                    gradeLevel = s.optInt("grade_level", 0),
+                    className = s.optString("class_name").takeIf { it.isNotEmpty() },
+                    linkedAt = s.optString("linked_at").takeIf { it.isNotEmpty() },
+                ),
+            )
+        }
+        out
+    } catch (e: Exception) {
+        emptyList()
+    }
+
+    /** Link a student (by ssn_encrypted) to the authenticated teacher. */
+    fun linkStudent(studentId: String): CallResult = try {
+        api.linkStudent(studentId)
+        CallResult(ok = true, message = "تمت إضافة الطالب إلى قائمتك.")
+    } catch (e: ApiClient.ApiException) {
+        CallResult(ok = false, message = e.message ?: "تعذّر إضافة الطالب")
+    } catch (e: Exception) {
+        CallResult(ok = false, message = "تعذّر الوصول إلى الخادم")
+    }
+
+    /** Read-only student portal payload (grades/attendance/schedule/…). */
+    fun getStudentPortal(ssnEncrypted: String, gradeLevel: Int): JSONObject? = try {
+        api.studentPortal(ssnEncrypted, gradeLevel)
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun parseAccount(o: JSONObject): TeacherAccount = TeacherAccount(
+        id = o.optString("id"),
+        name = o.optString("name").ifEmpty { "—" },
+        email = o.optString("email"),
+        phone = o.optString("phone").takeIf { it.isNotEmpty() },
+        subject = o.optString("subject").takeIf { it.isNotEmpty() },
+        isVerified = o.optBoolean("is_verified", false) || o.optInt("is_verified", 0) == 1,
+    )
 }

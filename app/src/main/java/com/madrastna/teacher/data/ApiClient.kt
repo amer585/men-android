@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
  * Backend API client.
  *
  * All data access now goes through the deployed backend
- * (https://amer21-mcp.hf.space/api) over HTTPS. NO Turso/libSQL database
+ * (https://amer585-intlaqa-backend.hf.space/api) over HTTPS. NO Turso/libSQL database
  * token is embedded in the APK — the backend owns the database, caching and
  * security, and authenticates every request with a short-lived JWT.
  *

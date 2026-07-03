@@ -23,7 +23,7 @@ android {
         // The app never embeds a database token; the backend owns DB + security.
         // Optional override via local.properties BACKEND_URL.
         buildConfigField("String", "BACKEND_URL",
-            "\"${props.getProperty("BACKEND_URL", "https://amer21-mcp.hf.space/api")}\"")
+            "\"${props.getProperty("BACKEND_URL", "https://amer585-intlaqa-backend.hf.space/api")}\"")
     }
 
     buildFeatures {

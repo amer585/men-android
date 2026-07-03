@@ -7,4 +7,4 @@
 #
 # BACKEND_URL is the absolute API root (the deployed Hugging Face Space).
 
-BACKEND_URL=https://amer21-mcp.hf.space/api
+BACKEND_URL=https://amer585-intlaqa-backend.hf.space/api

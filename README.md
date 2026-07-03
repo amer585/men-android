@@ -1,7 +1,7 @@
 # مدرستنا - المعلم (Teacher App)
 
 Android app for teachers. Talks **only** to the deployed backend
-(`https://amer21-mcp.hf.space/api`) over HTTPS — **no Turso/libSQL database
+(`https://amer585-intlaqa-backend.hf.space/api`) over HTTPS — **no Turso/libSQL database
 token is embedded in the APK**. The backend owns the databases, caching and
 security and authenticates every request with a short-lived JWT.
 
@@ -19,7 +19,7 @@ The backend URL is a **public** value and is shipped in `BuildConfig`. To
 override it locally, create `local.properties` in the project root (gitignored):
 
 ```properties
-BACKEND_URL=https://amer21-mcp.hf.space/api
+BACKEND_URL=https://amer585-intlaqa-backend.hf.space/api
 ```
 
 ## Build & Run

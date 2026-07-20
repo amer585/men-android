@@ -201,6 +201,20 @@ class TeacherRepository(private val api: ApiClient) {
         CallResult(ok = false, message = "تعذّر الوصول إلى الخادم")
     }
 
+    /**
+     * Unlink a student from the authenticated teacher. The student record is
+     * NEVER deleted — it stays in the student DB; only the relation (and the
+     * backend's cached roster) is removed.
+     */
+    fun unlinkStudent(studentId: String): CallResult = try {
+        api.unlinkStudent(studentId)
+        CallResult(ok = true, message = "تم إلغاء ربط الطالب.")
+    } catch (e: ApiClient.ApiException) {
+        CallResult(ok = false, message = e.message ?: "تعذّر إلغاء الربط")
+    } catch (e: Exception) {
+        CallResult(ok = false, message = "تعذّر الوصول إلى الخادم")
+    }
+
     /** Read-only student portal payload (grades/attendance/schedule/…). */
     fun getStudentPortal(ssnEncrypted: String, gradeLevel: Int): JSONObject? = try {
         api.studentPortal(ssnEncrypted, gradeLevel)

@@ -145,6 +145,21 @@ fun TeacherAccountScreen(
         }.start()
     }
 
+    fun doUnlink(s: LinkedStudent) {
+        loading = true; message = null
+        Thread {
+            val res = repository.unlinkStudent(s.studentId)
+            mainHandler.post {
+                loading = false
+                message = res.message
+                if (res.ok) {
+                    if (portalFor == s.studentId) { portal = null; portalFor = null }
+                    loadStudents()
+                }
+            }
+        }.start()
+    }
+
     fun logout() {
         repository.clearSession()
         account = null
@@ -291,7 +306,15 @@ fun TeacherAccountScreen(
                                 modifier = Modifier.padding(vertical = 12.dp),
                             )
                         } else {
-                            students.forEach { s -> StudentRow(s, portalFor, portal) { showPortal(s) } }
+                            students.forEach { s ->
+                                StudentRow(
+                                    s = s,
+                                    portalFor = portalFor,
+                                    portal = portal,
+                                    onShow = { showPortal(s) },
+                                    onUnlink = { doUnlink(s) },
+                                )
+                            }
                         }
 
                         Spacer(Modifier.height(18.dp))
@@ -313,6 +336,7 @@ private fun StudentRow(
     portalFor: String?,
     portal: JSONObject?,
     onShow: () -> Unit,
+    onUnlink: () -> Unit,
 ) {
     val gradeLabel = GRADE_LABELS[s.gradeLevel] ?: "الصف ${s.gradeLevel}"
     Column(
@@ -331,6 +355,9 @@ private fun StudentRow(
             }
             TextButton(onClick = onShow) {
                 Text(if (portalFor == s.studentId) "إخفاء" else "عرض الملف", color = Gold400)
+            }
+            TextButton(onClick = onUnlink) {
+                Text("إلغاء", color = Rose400, fontSize = 12.sp)
             }
         }
         if (portalFor == s.studentId) {

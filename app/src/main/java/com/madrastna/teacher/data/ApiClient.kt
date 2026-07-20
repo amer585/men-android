@@ -80,6 +80,9 @@ class ApiClient(context: Context) {
     private fun get(path: String, withAuth: Boolean): JSONObject =
         send(path, "GET", null, withAuth)
 
+    private fun delete(path: String, withAuth: Boolean): JSONObject =
+        send(path, "DELETE", null, withAuth)
+
     private fun enc(value: String): String = URLEncoder.encode(value, "UTF-8")
 
     // ── Staff (legacy grade-entry) ─────────────────────────────
@@ -150,13 +153,29 @@ class ApiClient(context: Context) {
     fun linkStudent(studentId: String): JSONObject =
         post("teacher/students", JSONObject().put("student_id", studentId), withAuth = true)
 
+    /**
+     * DELETE /teacher/students/:id — removes ONLY the relation in the teacher
+     * DB. The student record stays in the student DB; the backend busts the
+     * cached roster on this write.
+     */
+    fun unlinkStudent(studentId: String): JSONObject =
+        delete("teacher/students/${enc(studentId)}", withAuth = true)
+
     // ── Student portal (read-only, used by the teacher dashboard) ──
 
-    /** GET /student/portal?ssn_encrypted=&grade_level= → full portal payload. */
+    /**
+     * POST /student/portal { ssn_encrypted, grade_level } → full portal payload.
+     * The backend (v5) gates this route behind the JWT and moved the SSN out of
+     * the URL into the body — teacher-account tokens may read a linked
+     * student's portal by passing the identifiers explicitly.
+     */
     fun studentPortal(ssnEncrypted: String, gradeLevel: Int): JSONObject =
-        get(
-            "student/portal?ssn_encrypted=${enc(ssnEncrypted)}&grade_level=$gradeLevel",
-            withAuth = false,
+        post(
+            "student/portal",
+            JSONObject()
+                .put("ssn_encrypted", ssnEncrypted)
+                .put("grade_level", gradeLevel),
+            withAuth = true,
         )
 
     companion object {

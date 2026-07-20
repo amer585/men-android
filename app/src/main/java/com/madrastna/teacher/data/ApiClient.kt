@@ -143,6 +143,23 @@ class ApiClient(context: Context) {
         return res
     }
 
+    /**
+     * POST /teacher/verification-status { email, password } →
+     * { id, name, is_verified, status: "pending"|"approved", message }.
+     *
+     * A pending teacher cannot log in (the backend blocks with 403 BEFORE
+     * issuing a JWT), so this credential-authenticated endpoint is the only
+     * way for them to poll their approval state. No token is required — the
+     * email + password must match (identical 401 for unknown email / bad
+     * password, so the endpoint stays non-enumerable).
+     */
+    fun teacherVerificationStatus(email: String, password: String): JSONObject {
+        val body = JSONObject()
+            .put("email", email)
+            .put("password", password)
+        return post("teacher/verification-status", body, withAuth = false)
+    }
+
     /** GET /teacher/profile → account object. */
     fun teacherProfile(): JSONObject = get("teacher/profile", withAuth = true)
 

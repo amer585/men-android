@@ -118,4 +118,16 @@ data class CallResult(
     val ok: Boolean,
     val message: String,
     val account: TeacherAccount? = null,
+    /** HTTP status when the call failed at the API layer (0 = network/other). */
+    val httpStatus: Int = 0,
+) {
+    /** True when the backend rejected login with 403 PENDING_APPROVAL. */
+    val isPendingApproval: Boolean get() = !ok && httpStatus == 403
+}
+
+/** Result of polling /teacher/verification-status with credentials. */
+data class VerificationCheck(
+    val verified: Boolean,
+    val status: String, // "pending" | "approved"
+    val message: String,
 )

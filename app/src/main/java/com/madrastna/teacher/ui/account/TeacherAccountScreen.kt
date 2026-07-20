@@ -54,6 +54,9 @@ fun TeacherAccountScreen(
     var isRegister by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
+    // True when the backend rejected login with 403 PENDING_APPROVAL — the
+    // credentials were right but the admin hasn't approved the account yet.
+    var pendingApproval by remember { mutableStateOf(false) }
 
     // form fields
     var name by remember { mutableStateOf("") }
@@ -81,7 +84,7 @@ fun TeacherAccountScreen(
         if (email.isBlank() || password.isBlank()) {
             message = "أدخل البريد الإلكتروني وكلمة المرور"; return
         }
-        loading = true; message = null
+        loading = true; message = null; pendingApproval = false
         Thread {
             val res = repository.teacherLogin(email.trim(), password)
             mainHandler.post {
@@ -91,7 +94,32 @@ fun TeacherAccountScreen(
                     portal = null; portalFor = null
                     loadStudents()
                 } else {
-                    message = res.message
+                    pendingApproval = res.isPendingApproval
+                    message = if (res.isPendingApproval)
+                        "بياناتك صحيحة — حسابك بانتظار موافقة الإدارة."
+                    else res.message
+                }
+            }
+        }.start()
+    }
+
+    /** Poll /teacher/verification-status with the entered credentials. */
+    fun doCheckStatus() {
+        if (email.isBlank() || password.isBlank()) return
+        loading = true
+        Thread {
+            val check = repository.checkVerificationStatus(email.trim(), password)
+            mainHandler.post {
+                loading = false
+                when {
+                    check == null ->
+                        message = "تعذّر التحقق من الحالة — تأكد من البيانات والاتصال."
+                    check.verified -> {
+                        pendingApproval = false
+                        message = "✅ تم تفعيل حسابك! اضغط «دخول» للمتابعة."
+                    }
+                    else ->
+                        message = "⏳ حسابك ما زال قيد المراجعة — حاول مرة أخرى لاحقًا."
                 }
             }
         }.start()
@@ -166,6 +194,7 @@ fun TeacherAccountScreen(
         students = emptyList()
         portal = null; portalFor = null
         isRegister = false
+        pendingApproval = false
         email = ""; password = ""; name = ""; phone = ""; subject = ""
     }
 
@@ -200,9 +229,9 @@ fun TeacherAccountScreen(
                 GlassCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 28.dp) {
                     Column(Modifier.padding(24.dp)) {
                         Row(Modifier.fillMaxWidth()) {
-                            FilterChipTab("تسجيل الدخول", !isRegister) { isRegister = false; message = null }
+                            FilterChipTab("تسجيل الدخول", !isRegister) { isRegister = false; message = null; pendingApproval = false }
                             Spacer(Modifier.width(10.dp))
-                            FilterChipTab("حساب جديد", isRegister) { isRegister = true; message = null }
+                            FilterChipTab("حساب جديد", isRegister) { isRegister = true; message = null; pendingApproval = false }
                         }
                         Spacer(Modifier.height(18.dp))
 
@@ -224,6 +253,32 @@ fun TeacherAccountScreen(
                         }
 
                         MessageBanner(message)
+
+                        // ── Pending-approval panel: poll /teacher/verification-status ──
+                        if (pendingApproval) {
+                            Spacer(Modifier.height(12.dp))
+                            Column(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(Amber400.copy(alpha = 0.10f))
+                                    .padding(14.dp),
+                            ) {
+                                Text(
+                                    "⏳ الحساب بانتظار موافقة الإدارة. يمكنك التحقق من حالة التفعيل الآن.",
+                                    color = Amber400,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Spacer(Modifier.height(10.dp))
+                                GoldGradientButton(
+                                    text = if (loading) "جارٍ التحقق…" else "التحقق من حالة التفعيل",
+                                    onClick = { if (!loading) doCheckStatus() },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    enabled = !loading,
+                                )
+                            }
+                        }
 
                         Spacer(Modifier.height(20.dp))
                         GoldGradientButton(

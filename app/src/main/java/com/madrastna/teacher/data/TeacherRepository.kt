@@ -138,9 +138,26 @@ class TeacherRepository(private val api: ApiClient) {
             account = parseAccount(res.optJSONObject("account") ?: JSONObject()),
         )
     } catch (e: ApiClient.ApiException) {
-        CallResult(ok = false, message = e.message ?: "بيانات الدخول غير صحيحة")
+        // httpStatus 403 ⇒ account is pending admin approval (PENDING_APPROVAL).
+        CallResult(ok = false, message = e.message ?: "بيانات الدخول غير صحيحة", httpStatus = e.status)
     } catch (e: Exception) {
         CallResult(ok = false, message = "تعذّر الوصول إلى الخادم")
+    }
+
+    /**
+     * Poll the approval state of a registered account using its CREDENTIALS
+     * (no JWT exists yet while the account is pending). Returns null when the
+     * credentials are rejected or the server is unreachable.
+     */
+    fun checkVerificationStatus(email: String, password: String): VerificationCheck? = try {
+        val res = api.teacherVerificationStatus(email, password)
+        VerificationCheck(
+            verified = res.optBoolean("is_verified", false) || res.optInt("is_verified", 0) == 1,
+            status = res.optString("status").ifEmpty { "pending" },
+            message = res.optString("message"),
+        )
+    } catch (e: Exception) {
+        null
     }
 
     /** Public self-registration (account is created pending admin approval). */

@@ -239,6 +239,177 @@ class TeacherRepository(private val api: ApiClient) {
         null
     }
 
+    // ── Teacher ⇄ student bridge (v6) ─────────────────────────
+    //
+    // The teacher DB holds ONLY the account + student-id pointers. Every call
+    // below hits a backend endpoint that reads/writes the STUDENT database,
+    // handles the cross-database import, owns the cache, and authorizes the
+    // teacher against the relation table. No student data is persisted on the
+    // device and none is copied into the teacher database.
+
+    /**
+     * Search the STUDENT database for a student who is NOT in the teacher's own
+     * database. Accepts a 14-digit id, an id prefix or part of an Arabic name.
+     */
+    fun searchStudents(
+        query: String?,
+        schoolName: String? = null,
+        gradeLevel: Int? = null,
+        className: String? = null,
+    ): List<StudentSearchHit> = try {
+        val res = api.searchStudents(query, schoolName, gradeLevel, className)
+        val arr = res.optJSONArray("results") ?: return emptyList()
+        val out = mutableListOf<StudentSearchHit>()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            out.add(StudentSearchHit(parseProfile(o), o.optBoolean("imported", false)))
+        }
+        out
+    } catch (e: Exception) {
+        emptyList()
+    }
+
+    /** Import an EXISTING student (student DB) into the roster — pointer only. */
+    fun importStudent(studentId: String): CallResult = try {
+        val res = api.importStudent(studentId)
+        CallResult(ok = true, message = res.optString("message").ifEmpty { "تم استيراد الطالب من قاعدة بيانات الطلاب." })
+    } catch (e: ApiClient.ApiException) {
+        CallResult(ok = false, message = e.message ?: "تعذّر الاستيراد", httpStatus = e.status)
+    } catch (e: Exception) {
+        CallResult(ok = false, message = "تعذّر الوصول إلى الخادم")
+    }
+
+    /**
+     * Add a NEW student. The row is created in the STUDENT DATABASE by the
+     * backend (which mints the 14-digit id when [ssnEncrypted] is blank) and
+     * then linked to this teacher.
+     */
+    fun addStudent(
+        nameAr: String,
+        gradeLevel: Int,
+        className: String? = null,
+        schoolName: String? = null,
+        adminZone: String? = null,
+        gender: String? = null,
+        ssnEncrypted: String? = null,
+    ): Pair<CallResult, StudentProfile?> = try {
+        val res = api.addStudent(nameAr, gradeLevel, className, schoolName, adminZone, gender, ssnEncrypted)
+        val profile = res.optJSONObject("student")?.let { parseProfile(it) }
+        val msg = res.optString("message").ifEmpty { "تم حفظ الطالب في قاعدة بيانات الطلاب." }
+        CallResult(ok = true, message = msg) to profile
+    } catch (e: ApiClient.ApiException) {
+        CallResult(ok = false, message = e.message ?: "تعذّر إضافة الطالب", httpStatus = e.status) to null
+    } catch (e: Exception) {
+        CallResult(ok = false, message = "تعذّر الوصول إلى الخادم") to null
+    }
+
+    /** Full academic view of one owned student, imported + cached by the backend. */
+    fun studentDetail(studentId: String): StudentDetail? = try {
+        val res = api.studentDetail(studentId)
+        val profileJson = res.optJSONObject("student") ?: return null
+        StudentDetail(
+            profile = parseProfile(profileJson),
+            grades = res.optJSONArray("grades").mapObjects { o ->
+                GradeRow(
+                    subjectName = o.optString("subject_name"),
+                    gradeValue = o.optString("grade_value"),
+                    updatedAt = o.optString("updated_at").takeIf { it.isNotEmpty() },
+                )
+            },
+            attendance = res.optJSONArray("attendance").mapObjects { o ->
+                AttendanceRow(
+                    date = o.optString("date"),
+                    status = o.optString("status"),
+                    note = o.optString("note").takeIf { it.isNotEmpty() },
+                )
+            },
+            weekly = res.optJSONArray("weekly").mapObjects { o ->
+                WeeklyRow(
+                    subjectName = o.optString("subject_name"),
+                    weekNumber = o.optInt("week_number", 0),
+                    score = o.optDouble("score", 0.0),
+                    maxScore = o.optDouble("max_score", 10.0),
+                )
+            },
+            cached = res.optBoolean("cached", false),
+        )
+    } catch (e: Exception) {
+        null
+    }
+
+    /** Edit an owned student — the UPDATE lands in the STUDENT database. */
+    fun updateStudent(
+        studentId: String,
+        nameAr: String? = null,
+        gradeLevel: Int? = null,
+        className: String? = null,
+        schoolName: String? = null,
+        gender: String? = null,
+    ): CallResult = try {
+        val res = api.updateStudent(studentId, nameAr, gradeLevel, className, schoolName, gender)
+        CallResult(ok = true, message = res.optString("message").ifEmpty { "تم حفظ التعديل في قاعدة بيانات الطلاب." })
+    } catch (e: ApiClient.ApiException) {
+        CallResult(ok = false, message = e.message ?: "تعذّر حفظ التعديل", httpStatus = e.status)
+    } catch (e: Exception) {
+        CallResult(ok = false, message = "تعذّر الوصول إلى الخادم")
+    }
+
+    /** Save grades for an owned student → student_grades in the STUDENT database. */
+    fun saveStudentGrades(studentId: String, grades: Map<String, String>): CallResult = try {
+        val res = api.saveStudentGrades(studentId, grades)
+        CallResult(ok = true, message = res.optString("message").ifEmpty { "تم حفظ الدرجات." })
+    } catch (e: ApiClient.ApiException) {
+        CallResult(ok = false, message = e.message ?: "تعذّر حفظ الدرجات", httpStatus = e.status)
+    } catch (e: Exception) {
+        CallResult(ok = false, message = "تعذّر الوصول إلى الخادم")
+    }
+
+    /** Record attendance for an owned student → attendance in the STUDENT database. */
+    fun saveStudentAttendance(studentId: String, status: String, date: String? = null): CallResult = try {
+        val res = api.saveStudentAttendance(studentId, status, date)
+        CallResult(ok = true, message = res.optString("message").ifEmpty { "تم تسجيل الحضور." })
+    } catch (e: ApiClient.ApiException) {
+        CallResult(ok = false, message = e.message ?: "تعذّر تسجيل الحضور", httpStatus = e.status)
+    } catch (e: Exception) {
+        CallResult(ok = false, message = "تعذّر الوصول إلى الخادم")
+    }
+
+    /** Dashboard header stats (served from the backend's cached roster). */
+    fun teacherStats(): TeacherStats? = try {
+        val totals = api.teacherDashboard().optJSONObject("totals") ?: return null
+        val gradesArr = totals.optJSONArray("grades")
+        val grades = mutableListOf<Int>()
+        if (gradesArr != null) for (i in 0 until gradesArr.length()) grades.add(gradesArr.optInt(i, 0))
+        TeacherStats(
+            students = totals.optInt("students", 0),
+            classes = totals.optInt("classes", 0),
+            schools = totals.optInt("schools", 0),
+            grades = grades.filter { it > 0 },
+        )
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun parseProfile(o: JSONObject): StudentProfile = StudentProfile(
+        studentId = o.optString("student_id").ifEmpty { o.optString("ssn_encrypted") },
+        nameAr = o.optString("student_name_ar").takeIf { it.isNotEmpty() },
+        gender = o.optString("gender").takeIf { it.isNotEmpty() },
+        schoolName = o.optString("school_name").takeIf { it.isNotEmpty() },
+        adminZone = o.optString("admin_zone").takeIf { it.isNotEmpty() },
+        gradeLevel = o.optInt("grade_level", 0),
+        className = o.optString("class_name").takeIf { it.isNotEmpty() },
+    )
+
+    private fun <T> org.json.JSONArray?.mapObjects(transform: (JSONObject) -> T): List<T> {
+        if (this == null) return emptyList()
+        val out = mutableListOf<T>()
+        for (i in 0 until length()) {
+            val o = optJSONObject(i) ?: continue
+            out.add(transform(o))
+        }
+        return out
+    }
+
     private fun parseAccount(o: JSONObject): TeacherAccount = TeacherAccount(
         id = o.optString("id"),
         name = o.optString("name").ifEmpty { "—" },

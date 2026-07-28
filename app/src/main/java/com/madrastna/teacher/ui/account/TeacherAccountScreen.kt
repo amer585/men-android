@@ -47,6 +47,13 @@ import org.json.JSONObject
 fun TeacherAccountScreen(
     repository: TeacherRepository,
     onBack: () -> Unit,
+    /**
+     * Opens the full student manager (search the STUDENT database, import,
+     * add, edit, grades, attendance). The teacher database only ever holds
+     * this account plus a list of student ids — the manager does everything
+     * through backend endpoints that read/write the STUDENT database.
+     */
+    onOpenStudents: () -> Unit = {},
 ) {
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
 
@@ -297,6 +304,16 @@ fun TeacherAccountScreen(
                 // ── DASHBOARD ──
                 GlassCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 28.dp) {
                     Column(Modifier.padding(22.dp)) {
+                        // v6 — entry point to the full student manager. Student
+                        // data lives in the STUDENT database; this teacher DB
+                        // stores only the account + student-id pointers.
+                        GoldGradientButton(
+                            text = "إدارة الطلاب · بحث · استيراد · إضافة",
+                            onClick = onOpenStudents,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Spacer(Modifier.height(16.dp))
+
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(current.name, color = TextPrimary,

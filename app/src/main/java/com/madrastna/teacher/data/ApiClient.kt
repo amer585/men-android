@@ -195,6 +195,113 @@ class ApiClient(context: Context) {
             withAuth = true,
         )
 
+    // ── Teacher ⇄ student bridge (v6) ──────────────────────────
+    //
+    // ARCHITECTURE: the teacher's database holds ONLY their account and a list
+    // of student ids. Every student fact lives in the STUDENT database. These
+    // endpoints make the backend do the cross-database import, the caching and
+    // the authorization — the APK never sees a database URL or token.
+
+    /**
+     * GET /teacher/students/search — searches the STUDENT database. This is how
+     * a teacher finds a student who is NOT in their own database. `q` accepts a
+     * 14-digit id, an id prefix, or part of an Arabic name.
+     */
+    fun searchStudents(
+        q: String?,
+        schoolName: String? = null,
+        gradeLevel: Int? = null,
+        className: String? = null,
+        limit: Int = 30,
+    ): JSONObject {
+        val parts = mutableListOf<String>()
+        q?.takeIf { it.isNotBlank() }?.let { parts.add("q=${enc(it)}") }
+        schoolName?.takeIf { it.isNotBlank() }?.let { parts.add("school_name=${enc(it)}") }
+        gradeLevel?.takeIf { it in 1..12 }?.let { parts.add("grade_level=$it") }
+        className?.takeIf { it.isNotBlank() }?.let { parts.add("class_name=${enc(it)}") }
+        parts.add("limit=$limit")
+        return get("teacher/students/search?${parts.joinToString("&")}", withAuth = true)
+    }
+
+    /**
+     * POST /teacher/students/import { student_id } — imports an EXISTING
+     * student from the student DB into the roster. Only the pointer is stored
+     * in the teacher DB; the profile is cached by the backend.
+     */
+    fun importStudent(studentId: String): JSONObject =
+        post("teacher/students/import", JSONObject().put("student_id", studentId), withAuth = true)
+
+    /**
+     * POST /teacher/students/add — creates a NEW student. The row is written to
+     * the STUDENT DATABASE (never the teacher DB) and then linked. Pass a null
+     * / blank ssn and the BACKEND mints the 14-digit id.
+     */
+    fun addStudent(
+        nameAr: String,
+        gradeLevel: Int,
+        className: String?,
+        schoolName: String?,
+        adminZone: String?,
+        gender: String?,
+        ssnEncrypted: String?,
+    ): JSONObject {
+        val body = JSONObject()
+            .put("student_name_ar", nameAr)
+            .put("grade_level", gradeLevel)
+        className?.takeIf { it.isNotBlank() }?.let { body.put("class_name", it) }
+        schoolName?.takeIf { it.isNotBlank() }?.let { body.put("school_name", it) }
+        adminZone?.takeIf { it.isNotBlank() }?.let { body.put("admin_zone", it) }
+        gender?.takeIf { it.isNotBlank() }?.let { body.put("gender", it) }
+        ssnEncrypted?.takeIf { it.isNotBlank() }?.let { body.put("ssn_encrypted", it) }
+        return post("teacher/students/add", body, withAuth = true)
+    }
+
+    /**
+     * GET /teacher/students/:id — full academic view of ONE owned student
+     * (profile + grades + attendance + weekly), imported from the student DB
+     * and cached for 180s. 403 when the student isn't in the roster.
+     */
+    fun studentDetail(studentId: String): JSONObject =
+        get("teacher/students/${enc(studentId)}", withAuth = true)
+
+    /** PATCH /teacher/students/:id — the UPDATE lands in the STUDENT database. */
+    fun updateStudent(
+        studentId: String,
+        nameAr: String? = null,
+        gradeLevel: Int? = null,
+        className: String? = null,
+        schoolName: String? = null,
+        gender: String? = null,
+    ): JSONObject {
+        val body = JSONObject()
+        nameAr?.takeIf { it.isNotBlank() }?.let { body.put("student_name_ar", it) }
+        gradeLevel?.takeIf { it in 1..12 }?.let { body.put("grade_level", it) }
+        className?.takeIf { it.isNotBlank() }?.let { body.put("class_name", it) }
+        schoolName?.takeIf { it.isNotBlank() }?.let { body.put("school_name", it) }
+        gender?.takeIf { it.isNotBlank() }?.let { body.put("gender", it) }
+        return send("teacher/students/${enc(studentId)}", "PATCH", body.toString(), withAuth = true)
+    }
+
+    /** POST /teacher/students/:id/grades — writes student_grades in the STUDENT DB. */
+    fun saveStudentGrades(studentId: String, grades: Map<String, String>): JSONObject {
+        val arr = JSONArray()
+        grades.forEach { (subject, value) ->
+            arr.put(JSONObject().put("subject_name", subject).put("grade_value", value))
+        }
+        return post("teacher/students/${enc(studentId)}/grades", JSONObject().put("grades", arr), withAuth = true)
+    }
+
+    /** POST /teacher/students/:id/attendance — writes attendance in the STUDENT DB. */
+    fun saveStudentAttendance(studentId: String, status: String, date: String? = null, note: String? = null): JSONObject {
+        val body = JSONObject().put("status", status)
+        date?.takeIf { it.isNotBlank() }?.let { body.put("date", it) }
+        note?.takeIf { it.isNotBlank() }?.let { body.put("note", it) }
+        return post("teacher/students/${enc(studentId)}/attendance", body, withAuth = true)
+    }
+
+    /** GET /teacher/dashboard — header stats derived from the cached roster. */
+    fun teacherDashboard(): JSONObject = get("teacher/dashboard", withAuth = true)
+
     companion object {
         private const val PREFS = "madrastna_api"
         private const val KEY_JWT = "jwt"

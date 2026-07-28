@@ -131,3 +131,73 @@ data class VerificationCheck(
     val status: String, // "pending" | "approved"
     val message: String,
 )
+
+// ── Teacher ⇄ student bridge (v6) ────────────────────────────────────────
+//
+// The teacher's database stores identity + a list of student ids. NOTHING here
+// is persisted on the device or in the teacher DB — these are transient view
+// models for data the backend imported from the STUDENT database and cached.
+
+/** A student profile as returned by the teacher-scoped endpoints. */
+data class StudentProfile(
+    val studentId: String,
+    val nameAr: String?,
+    val gender: String?,
+    val schoolName: String?,
+    val adminZone: String?,
+    val gradeLevel: Int,
+    val className: String?,
+)
+
+/** A hit from searching the STUDENT database, flagged with roster membership. */
+data class StudentSearchHit(
+    val profile: StudentProfile,
+    val imported: Boolean,
+)
+
+/** One subject grade stored in the STUDENT database. */
+data class GradeRow(
+    val subjectName: String,
+    val gradeValue: String,
+    val updatedAt: String?,
+)
+
+/** One attendance day stored in the STUDENT database. */
+data class AttendanceRow(
+    val date: String,
+    val status: String, // present | absent | late | excused
+    val note: String?,
+)
+
+/** One weekly assessment stored in the STUDENT database. */
+data class WeeklyRow(
+    val subjectName: String,
+    val weekNumber: Int,
+    val score: Double,
+    val maxScore: Double,
+)
+
+/** The full academic view of one owned student (imported + cached by backend). */
+data class StudentDetail(
+    val profile: StudentProfile,
+    val grades: List<GradeRow>,
+    val attendance: List<AttendanceRow>,
+    val weekly: List<WeeklyRow>,
+    val cached: Boolean,
+)
+
+/** Teacher dashboard header stats. */
+data class TeacherStats(
+    val students: Int,
+    val classes: Int,
+    val schools: Int,
+    val grades: List<Int>,
+)
+
+/** Attendance status codes + their Arabic labels. */
+val ATTENDANCE_STATUSES = listOf(
+    "present" to "حاضر",
+    "absent" to "غائب",
+    "late" to "متأخر",
+    "excused" to "بعذر",
+)

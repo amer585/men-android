@@ -22,6 +22,7 @@ import com.madrastna.teacher.ui.account.TeacherAccountScreen
 import com.madrastna.teacher.ui.grades.ClassSelectScreen
 import com.madrastna.teacher.ui.grades.GradesScreen
 import com.madrastna.teacher.ui.login.LoginScreen
+import com.madrastna.teacher.ui.students.TeacherStudentsScreen
 import com.madrastna.teacher.ui.theme.Gold400
 import com.madrastna.teacher.ui.theme.MadrastnaTheme
 import com.madrastna.teacher.ui.theme.TextSecondary
@@ -43,7 +44,10 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun AppNavigation(repository: TeacherRepository) {
-    // "staff" = legacy username grade-entry · "teacher" = teacher-account workflow.
+    // "staff"    = legacy username grade-entry
+    // "teacher"  = teacher-account workflow (email login / register / dashboard)
+    // "students" = teacher student manager (search/import/add/edit against the
+    //              STUDENT database — the teacher DB only holds id pointers)
     var mode by remember { mutableStateOf("staff") }
 
     // Staff / grade-entry session state.
@@ -57,10 +61,17 @@ private fun AppNavigation(repository: TeacherRepository) {
     val currentClass = selectedClass
 
     when {
+        // ── Teacher student manager (STUDENT-database backed) ──
+        mode == "students" -> TeacherStudentsScreen(
+            repository = repository,
+            onBack = { mode = "teacher" },
+        )
+
         // ── Teacher-account workflow (email login / register / dashboard) ──
         mode == "teacher" -> TeacherAccountScreen(
             repository = repository,
             onBack = { mode = "staff" },
+            onOpenStudents = { mode = "students" },
         )
 
         // ── Staff login ──
